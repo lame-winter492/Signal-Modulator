@@ -61,16 +61,13 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         (params[SM_LOWPASS_3]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_4]->u.bd.value ? 1 : 0);
 
-    for (int sourceY = 0; sourceY < rows; sourceY += lineStep) {
-        const auto* src = reinterpret_cast<const PF_Pixel8*>(
-            srcBase + static_cast<std::size_t>(sourceY) * srcStride);
-        const int baseline = vertical
-            ? static_cast<int>((static_cast<float>(sourceY) / std::max(rows, 1)) * (width - 1))
-            : sourceY;
-
-        for (int x = 0; x < width; ++x) {
-            const int sampledX = std::min((x / downsample) * downsample, width - 1);
-            const PF_Pixel8& pixel = src[sampledX];
+    const int lineCount = vertical ? width : rows;
+    const int sampleLength = vertical ? rows : width;
+    for (int line = 0; line < lineCount; line += lineStep) {
+        const int baseline = line;
+        for (int position = 0; position < sampleLength; ++position) {
+            const int sampledPosition = std::min(
+                (position / downsample) * downsample, sampleLength - 1);
             const int radius = lowpassStages * std::max(1, downsample);
             float red = 0.0f;
             float green = 0.0f;
@@ -78,8 +75,13 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             float alpha = 0.0f;
             int samples = 0;
             for (int offset = -radius; offset <= radius; offset += std::max(1, downsample)) {
-                const int sampleX = std::clamp(sampledX + offset, 0, width - 1);
-                const PF_Pixel8& sample = src[sampleX];
+                const int filteredPosition = std::clamp(
+                    sampledPosition + offset, 0, sampleLength - 1);
+                const int filteredX = vertical ? line : filteredPosition;
+                const int filteredY = vertical ? filteredPosition : line;
+                const auto* filteredRow = reinterpret_cast<const PF_Pixel8*>(
+                    srcBase + static_cast<std::size_t>(filteredY) * srcStride);
+                const PF_Pixel8& sample = filteredRow[filteredX];
                 red += sample.red;
                 green += sample.green;
                 blue += sample.blue;
@@ -109,24 +111,23 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 signal = 1.0f - signal;
             }
             const float carrier = std::sin(
-                (static_cast<float>(x) / std::max(width, 1)) * frequency * 6.2831853f * direction +
+                (static_cast<float>(position) / std::max(sampleLength, 1)) *
+                    frequency * 6.2831853f * direction +
                 phase);
             const float centered = signal - 0.5f;
             const float shaped = std::tanh(centered * (3.0f + distortion * 10.0f));
             const int displacement = static_cast<int>(
                 (shaped + carrier * distortion * 0.035f) * lineAmplitude);
-            const int target = vertical
-                ? static_cast<int>((static_cast<float>(x) / std::max(width, 1)) * (rows - 1)) + displacement
-                : baseline + displacement;
-            const int targetX = vertical ? baseline : x;
-            if (target < 0 || target >= rows || targetX < 0 || targetX >= width) {
+            const int targetX = vertical ? baseline + displacement : position;
+            const int targetY = vertical ? position : baseline + displacement;
+            if (targetY < 0 || targetY >= rows || targetX < 0 || targetX >= width) {
                 continue;
             }
 
             const float displaySignal = std::pow(std::clamp(signal, 0.0f, 1.0f), 1.35f);
             const std::uint8_t intensity = clampByte(displaySignal * opacity * alphaMask * 255.0f);
             PF_Pixel8& result = reinterpret_cast<PF_Pixel8*>(
-                dstBase + static_cast<std::size_t>(target) * dstStride)[targetX];
+                dstBase + static_cast<std::size_t>(targetY) * dstStride)[targetX];
             result.alpha = ignoreAlpha ? 255 : clampByte(alpha * alphaMask);
             if (rgb) {
                 result.red = params[SM_CH1]->u.bd.value ? clampByte(red * opacity) : 0;
