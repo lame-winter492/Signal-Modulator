@@ -43,29 +43,69 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
     const bool rgb = params[SM_COLOR_SCHEME]->u.pd.value == 2;
 
     for (int y = 0; y < rows; ++y) {
-        const auto* src = reinterpret_cast<const PF_Pixel8*>(
-            srcBase + static_cast<std::size_t>(y) * srcStride);
         auto* dst = reinterpret_cast<PF_Pixel8*>(
             dstBase + static_cast<std::size_t>(y) * dstStride);
         for (int x = 0; x < width; ++x) {
-            const int coordinate = vertical ? y : x;
-            const int extent = vertical ? std::max(rows, 1) : std::max(width, 1);
-            const float normalized = static_cast<float>(coordinate) / static_cast<float>(extent);
-            const float direction = reverse ? -1.0f : 1.0f;
-            const float wave = std::sin(normalized * frequency * 6.2831853f * direction + phase);
-            const float shaped = std::tanh(wave * (1.0f + distortion * 8.0f));
-            const float gain = 1.0f + (invert ? -1.0f : 1.0f) * distortion * shaped;
-            const int sampledX = (x / downsample) * downsample;
-            const PF_Pixel8& pixel = src[std::min(sampledX, width - 1)];
-            PF_Pixel8& result = dst[x];
-            result.alpha = pixel.alpha;
-            const float factor = 1.0f + (gain - 1.0f) * opacity;
-            const float luminance = (pixel.red * 0.299f + pixel.green * 0.587f + pixel.blue * 0.114f) * factor;
-            result.red = clampByte(rgb && params[SM_CH1]->u.bd.value ? pixel.red * factor : luminance);
-            result.green = clampByte(rgb && params[SM_CH2]->u.bd.value ? pixel.green * factor : luminance);
-            result.blue = clampByte(rgb && params[SM_CH3]->u.bd.value ? pixel.blue * factor : luminance);
-            if (!ignoreAlpha) {
-                result.alpha = clampByte(pixel.alpha * factor);
+            dst[x] = PF_Pixel8{0, 0, 0, 255};
+        }
+    }
+
+    const int lineStep = std::max(1, downsample);
+    const float lineAmplitude = std::max(2.0f, lineStep * 2.0f + distortion * 18.0f);
+    const float direction = reverse ? -1.0f : 1.0f;
+    const bool smooth = params[SM_LOWPASS_1]->u.bd.value ||
+        params[SM_LOWPASS_2]->u.bd.value ||
+        params[SM_LOWPASS_3]->u.bd.value ||
+        params[SM_LOWPASS_4]->u.bd.value;
+
+    for (int sourceY = 0; sourceY < rows; sourceY += lineStep) {
+        const auto* src = reinterpret_cast<const PF_Pixel8*>(
+            srcBase + static_cast<std::size_t>(sourceY) * srcStride);
+        const int baseline = vertical
+            ? static_cast<int>((static_cast<float>(sourceY) / std::max(rows, 1)) * (width - 1))
+            : sourceY;
+
+        for (int x = 0; x < width; ++x) {
+            const int sampledX = std::min((x / downsample) * downsample, width - 1);
+            const int neighborX = std::min(sampledX + (smooth ? downsample : 0), width - 1);
+            const PF_Pixel8& pixel = src[sampledX];
+            const PF_Pixel8& neighbor = src[neighborX];
+            float red = pixel.red;
+            float green = pixel.green;
+            float blue = pixel.blue;
+            if (smooth) {
+                red = (red + neighbor.red) * 0.5f;
+                green = (green + neighbor.green) * 0.5f;
+                blue = (blue + neighbor.blue) * 0.5f;
+            }
+
+            float signal = (red * 0.299f + green * 0.587f + blue * 0.114f) / 255.0f;
+            if (invert) {
+                signal = 1.0f - signal;
+            }
+            const float carrier = std::sin(
+                (static_cast<float>(x) / std::max(width, 1)) * frequency * 6.2831853f * direction +
+                phase);
+            const float shaped = std::tanh((signal - 0.5f) * (2.0f + distortion * 12.0f));
+            const int displacement = static_cast<int>(
+                (shaped + carrier * distortion * 0.15f) * lineAmplitude);
+            const int target = vertical
+                ? static_cast<int>((static_cast<float>(x) / std::max(width, 1)) * (rows - 1)) + displacement
+                : baseline + displacement;
+            const int targetX = vertical ? baseline : x;
+            if (target < 0 || target >= rows || targetX < 0 || targetX >= width) {
+                continue;
+            }
+
+            const std::uint8_t intensity = clampByte((0.35f + signal * 0.65f) * opacity * 255.0f);
+            PF_Pixel8& result = reinterpret_cast<PF_Pixel8*>(
+                dstBase + static_cast<std::size_t>(target) * dstStride)[targetX];
+            result.alpha = ignoreAlpha ? 255 : pixel.alpha;
+            result.red = rgb && params[SM_CH1]->u.bd.value ? intensity : intensity;
+            result.green = rgb && params[SM_CH2]->u.bd.value ? intensity : intensity;
+            result.blue = rgb && params[SM_CH3]->u.bd.value ? intensity : intensity;
+            if (!params[SM_HIDE_WHITE_LINE]->u.bd.value && intensity > 220) {
+                result.red = result.green = result.blue = 255;
             }
         }
     }
