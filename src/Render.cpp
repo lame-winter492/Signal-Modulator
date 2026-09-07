@@ -68,25 +68,40 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
 
         for (int x = 0; x < width; ++x) {
             const int sampledX = std::min((x / downsample) * downsample, width - 1);
-            const int neighborX = std::min(sampledX + downsample, width - 1);
             const PF_Pixel8& pixel = src[sampledX];
-            const PF_Pixel8& neighbor = src[neighborX];
-            float red = pixel.red;
-            float green = pixel.green;
-            float blue = pixel.blue;
-            if (lowpassStages > 0) {
-                red = (red + neighbor.red) * 0.5f;
-                green = (green + neighbor.green) * 0.5f;
-                blue = (blue + neighbor.blue) * 0.5f;
-                for (int stage = 1; stage < lowpassStages; ++stage) {
-                    red = (red + neighbor.red) * 0.5f;
-                    green = (green + neighbor.green) * 0.5f;
-                    blue = (blue + neighbor.blue) * 0.5f;
-                }
+            const int radius = lowpassStages * std::max(1, downsample);
+            float red = 0.0f;
+            float green = 0.0f;
+            float blue = 0.0f;
+            float alpha = 0.0f;
+            int samples = 0;
+            for (int offset = -radius; offset <= radius; offset += std::max(1, downsample)) {
+                const int sampleX = std::clamp(sampledX + offset, 0, width - 1);
+                const PF_Pixel8& sample = src[sampleX];
+                red += sample.red;
+                green += sample.green;
+                blue += sample.blue;
+                alpha += sample.alpha;
+                ++samples;
             }
+            red /= static_cast<float>(samples);
+            green /= static_cast<float>(samples);
+            blue /= static_cast<float>(samples);
+            alpha /= static_cast<float>(samples);
 
-            const float luminance = (red * 0.299f + green * 0.587f + blue * 0.114f) / 255.0f;
-            float signal = luminance;
+            const float channelCount =
+                (params[SM_CH1]->u.bd.value ? 1.0f : 0.0f) +
+                (params[SM_CH2]->u.bd.value ? 1.0f : 0.0f) +
+                (params[SM_CH3]->u.bd.value ? 1.0f : 0.0f) +
+                (params[SM_CH4]->u.bd.value ? 1.0f : 0.0f);
+            float signal = channelCount > 0.0f
+                ? ((params[SM_CH1]->u.bd.value ? red : 0.0f) +
+                   (params[SM_CH2]->u.bd.value ? green : 0.0f) +
+                   (params[SM_CH3]->u.bd.value ? blue : 0.0f) +
+                   (params[SM_CH4]->u.bd.value ? alpha : 0.0f)) /
+                      (255.0f * channelCount)
+                : 0.0f;
+            const float luminance = signal;
             if (invert) {
                 signal = 1.0f - signal;
             }
@@ -108,18 +123,13 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             const std::uint8_t intensity = clampByte((0.25f + luminance * 0.75f) * opacity * 255.0f);
             PF_Pixel8& result = reinterpret_cast<PF_Pixel8*>(
                 dstBase + static_cast<std::size_t>(target) * dstStride)[targetX];
-            result.alpha = ignoreAlpha ? 255 : pixel.alpha;
+            result.alpha = ignoreAlpha ? 255 : clampByte(alpha);
             if (rgb) {
                 result.red = params[SM_CH1]->u.bd.value ? clampByte(red * opacity) : 0;
                 result.green = params[SM_CH2]->u.bd.value ? clampByte(green * opacity) : 0;
                 result.blue = params[SM_CH3]->u.bd.value ? clampByte(blue * opacity) : 0;
             } else {
                 result.red = result.green = result.blue = intensity;
-            }
-            if (params[SM_CH4]->u.bd.value) {
-                result.red = std::max(result.red, intensity);
-                result.green = std::max(result.green, intensity);
-                result.blue = std::max(result.blue, intensity);
             }
             if (!params[SM_HIDE_WHITE_LINE]->u.bd.value && intensity > 220) {
                 result.red = result.green = result.blue = 255;
