@@ -61,9 +61,9 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         (params[SM_LOWPASS_2]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_3]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_4]->u.bd.value ? 1 : 0);
-    const int lineStep = contourMode ? std::max(2, 5 - lowpassStages) : 1;
+    const int lineStep = contourMode ? std::max(2, 4 - lowpassStages / 2) : 1;
     const float lineAmplitude = contourMode
-        ? std::max(4.0f, 2.0f + distortion * 36.0f)
+        ? std::max(8.0f, 18.0f + distortion * 3.5f)
         : std::max(4.0f, 4.0f + distortion * 80.0f);
     const float direction = reverse ? -1.0f : 1.0f;
 
@@ -120,18 +120,6 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             if (invert) {
                 signal = 1.0f - signal;
             }
-            const int previousPosition = std::max(
-                0, sampledPosition - std::max(1, downsample));
-            const int previousX = vertical ? line : previousPosition;
-            const int previousY = vertical ? previousPosition : line;
-            const auto* previousRow = reinterpret_cast<const PF_Pixel8*>(
-                srcBase + static_cast<std::size_t>(previousY) * srcStride);
-            const PF_Pixel8& previousPixel = previousRow[previousX];
-            const float previousLuminance =
-                (previousPixel.red * 0.299f +
-                 previousPixel.green * 0.587f +
-                 previousPixel.blue * 0.114f) / 255.0f;
-            const float edge = std::abs(luminance - previousLuminance);
             const float carrier = std::sin(
                 (static_cast<float>(position) / std::max(sampleLength, 1)) *
                     frequency * 6.2831853f * direction +
@@ -149,14 +137,9 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             }
 
             const float displaySignal = std::pow(std::clamp(signal, 0.0f, 1.0f), 1.35f);
-            const float contourBands = 3.0f + distortion * 10.0f;
-            const float contourPhase = displaySignal * contourBands;
-            const float contourDistance = std::abs(
-                contourPhase - std::round(contourPhase));
             const bool contourLine = contourMode
-                ? displaySignal > std::max(0.10f, 0.25f - distortion * 0.12f)
-                : edge > (0.035f + (1.0f - distortion) * 0.08f) ||
-                  (contourDistance < 0.018f && displaySignal > 0.18f);
+                ? displaySignal > 0.10f
+                : displaySignal > 0.02f;
             const std::uint8_t intensity = contourMode
                 ? (contourLine ? clampByte(opacity * alphaMask * 255.0f) : 0)
                 : clampByte(displaySignal * opacity * alphaMask * 255.0f);
