@@ -53,14 +53,16 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
 
     // Each source row becomes one thin scanline. Downsample affects the sampled
     // signal, not the spacing of the output lines.
-    const int lineStep = 1;
-    const float lineAmplitude = std::max(4.0f, 4.0f + distortion * 80.0f);
-    const float direction = reverse ? -1.0f : 1.0f;
     const int lowpassStages =
         (params[SM_LOWPASS_1]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_2]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_3]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_4]->u.bd.value ? 1 : 0);
+    const int lineStep = contourMode ? std::max(2, 5 - lowpassStages) : 1;
+    const float lineAmplitude = contourMode
+        ? std::max(4.0f, 2.0f + distortion * 36.0f)
+        : std::max(4.0f, 4.0f + distortion * 80.0f);
+    const float direction = reverse ? -1.0f : 1.0f;
 
     // Orientation is the direction in which the source is read. Horizontal
     // reads each row left-to-right; vertical reads each column top-to-bottom.
@@ -148,8 +150,10 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             const float contourPhase = displaySignal * contourBands;
             const float contourDistance = std::abs(
                 contourPhase - std::round(contourPhase));
-            const bool contourLine = edge > (0.035f + (1.0f - distortion) * 0.08f) ||
-                (contourDistance < 0.018f && displaySignal > 0.18f);
+            const bool contourLine = contourMode
+                ? displaySignal > std::max(0.10f, 0.25f - distortion * 0.12f)
+                : edge > (0.035f + (1.0f - distortion) * 0.08f) ||
+                  (contourDistance < 0.018f && displaySignal > 0.18f);
             const std::uint8_t intensity = contourMode
                 ? (contourLine ? clampByte(opacity * alphaMask * 255.0f) : 0)
                 : clampByte(displaySignal * opacity * alphaMask * 255.0f);
