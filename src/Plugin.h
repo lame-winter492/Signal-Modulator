@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AE_Effect.h"
+#include "entry.h"
 
 constexpr A_u_long SM_VERSION_MAJOR = 0;
 constexpr A_u_long SM_VERSION_MINOR = 1;

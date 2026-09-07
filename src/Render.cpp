@@ -16,8 +16,8 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         return PF_Err_NONE;
     }
 
-    const auto* srcBase = static_cast<const std::uint8_t*>(input->data);
-    auto* dstBase = static_cast<std::uint8_t*>(output->data);
+    const auto* srcBase = reinterpret_cast<const std::uint8_t*>(input->data);
+    auto* dstBase = reinterpret_cast<std::uint8_t*>(output->data);
 
     const int rows = std::min(input->height, output->height);
     const int srcStride = std::abs(input->rowbytes);
