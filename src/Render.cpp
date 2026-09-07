@@ -50,7 +50,7 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         }
     }
 
-    const int lineStep = std::max(1, downsample);
+    const int lineStep = std::max(1, downsample / 2);
     const float lineAmplitude = std::max(8.0f, 10.0f + distortion * 180.0f);
     const float direction = reverse ? -1.0f : 1.0f;
     const int lowpassStages =
@@ -112,7 +112,7 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             const float centered = signal - 0.5f;
             const float shaped = std::tanh(centered * (3.0f + distortion * 10.0f));
             const int displacement = static_cast<int>(
-                (shaped + carrier * distortion * 0.12f) * lineAmplitude);
+                (shaped + carrier * distortion * 0.035f) * lineAmplitude);
             const int target = vertical
                 ? static_cast<int>((static_cast<float>(x) / std::max(width, 1)) * (rows - 1)) + displacement
                 : baseline + displacement;
