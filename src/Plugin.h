@@ -22,14 +22,6 @@ enum ParamIndex {
     SM_DIRECTION,
     SM_ORIENTATION,
     SM_INVERT,
-    SM_OPACITY,
-    SM_IGNORE_ALPHA,
-    SM_HIDE_WHITE_LINE,
-    SM_COLOR_SCHEME,
-    SM_CH1,
-    SM_CH2,
-    SM_CH3,
-    SM_CH4,
     SM_CONTOUR_MODE,
     SM_NUM_PARAMS
 };

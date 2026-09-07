@@ -41,9 +41,6 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
     const bool vertical = params[SM_ORIENTATION]->u.pd.value == 1;
     const bool reverse = params[SM_DIRECTION]->u.pd.value == 2;
     const bool invert = params[SM_INVERT]->u.bd.value != 0;
-    const float opacity = static_cast<float>(params[SM_OPACITY]->u.fs_d.value) / 100.0f;
-    const bool ignoreAlpha = params[SM_IGNORE_ALPHA]->u.bd.value != 0;
-    const bool rgb = params[SM_COLOR_SCHEME]->u.pd.value == 2;
     const bool contourMode = params[SM_CONTOUR_MODE]->u.bd.value != 0;
 
     for (int y = 0; y < rows; ++y) {
@@ -104,19 +101,7 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             alpha /= static_cast<float>(samples);
             const float luminance = (red * 0.299f + green * 0.587f + blue * 0.114f) / 255.0f;
 
-            const float rgbChannelCount =
-                (params[SM_CH1]->u.bd.value ? 1.0f : 0.0f) +
-                (params[SM_CH2]->u.bd.value ? 1.0f : 0.0f) +
-                (params[SM_CH3]->u.bd.value ? 1.0f : 0.0f);
-            float signal = rgbChannelCount > 0.0f
-                ? ((params[SM_CH1]->u.bd.value ? red : 0.0f) +
-                   (params[SM_CH2]->u.bd.value ? green : 0.0f) +
-                   (params[SM_CH3]->u.bd.value ? blue : 0.0f)) /
-                      (255.0f * rgbChannelCount)
-                : luminance;
-            const float alphaMask = params[SM_CH4]->u.bd.value
-                ? alpha / 255.0f
-                : 1.0f;
+            float signal = luminance;
             if (invert) {
                 signal = 1.0f - signal;
             }
@@ -141,21 +126,12 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 ? displaySignal > 0.10f
                 : displaySignal > 0.02f;
             const std::uint8_t intensity = contourMode
-                ? (contourLine ? clampByte(opacity * alphaMask * 255.0f) : 0)
-                : clampByte(displaySignal * opacity * alphaMask * 255.0f);
+                ? (contourLine ? 255 : 0)
+                : clampByte(displaySignal * 255.0f);
             PF_Pixel8& result = reinterpret_cast<PF_Pixel8*>(
                 dstBase + static_cast<std::size_t>(targetY) * dstStride)[targetX];
-            result.alpha = ignoreAlpha ? 255 : clampByte(alpha * alphaMask);
-            if (rgb && !contourMode) {
-                result.red = params[SM_CH1]->u.bd.value ? clampByte(red * opacity) : 0;
-                result.green = params[SM_CH2]->u.bd.value ? clampByte(green * opacity) : 0;
-                result.blue = params[SM_CH3]->u.bd.value ? clampByte(blue * opacity) : 0;
-            } else {
-                result.red = result.green = result.blue = intensity;
-            }
-            if (!params[SM_HIDE_WHITE_LINE]->u.bd.value && intensity > 220) {
-                result.red = result.green = result.blue = 255;
-            }
+            result.alpha = 255;
+            result.red = result.green = result.blue = intensity;
 
             if (contourMode && contourLine && previousContour && targetX > 0) {
                 const int bridgeStart = std::min(previousTarget, targetY);
@@ -166,7 +142,7 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                     bridgeRow[targetX - 1].red = 255;
                     bridgeRow[targetX - 1].green = 255;
                     bridgeRow[targetX - 1].blue = 255;
-                    bridgeRow[targetX - 1].alpha = ignoreAlpha ? 255 : 255;
+                    bridgeRow[targetX - 1].alpha = 255;
                 }
             }
             previousTarget = targetY;
