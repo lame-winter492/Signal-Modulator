@@ -50,8 +50,10 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         }
     }
 
-    const int lineStep = std::max(1, downsample / 2);
-    const float lineAmplitude = std::max(8.0f, 10.0f + distortion * 180.0f);
+    // Each source row becomes one thin scanline. Downsample affects the sampled
+    // signal, not the spacing of the output lines.
+    const int lineStep = 1;
+    const float lineAmplitude = std::max(4.0f, 4.0f + distortion * 80.0f);
     const float direction = reverse ? -1.0f : 1.0f;
     const int lowpassStages =
         (params[SM_LOWPASS_1]->u.bd.value ? 1 : 0) +
@@ -121,9 +123,8 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 continue;
             }
 
-            const std::uint8_t intensity = clampByte(
-                (0.15f + std::pow(std::clamp(signal, 0.0f, 1.0f), 0.7f) * 0.85f) *
-                opacity * alphaMask * 255.0f);
+            const float displaySignal = std::pow(std::clamp(signal, 0.0f, 1.0f), 1.35f);
+            const std::uint8_t intensity = clampByte(displaySignal * opacity * alphaMask * 255.0f);
             PF_Pixel8& result = reinterpret_cast<PF_Pixel8*>(
                 dstBase + static_cast<std::size_t>(target) * dstStride)[targetX];
             result.alpha = ignoreAlpha ? 255 : clampByte(alpha * alphaMask);
