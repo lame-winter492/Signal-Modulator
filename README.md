@@ -19,3 +19,13 @@ Signal Modulator is an original Adobe After Effects effect plugin project for si
 ## Build
 
 See `/home/runner/work/Signal-Modulator/Signal-Modulator/DEVELOPMENT.md` for environment details and build/install/debug instructions.
+
+## Install on Windows
+
+After building the plugin, replace `2025` with your installed After Effects version and run:
+
+```powershell
+Copy-Item -Path ".\build\SignalModulator.aex" -Destination (Join-Path ${env:ProgramFiles} "Adobe\Adobe After Effects 2025\Support Files\Plug-ins") -Force
+```
+
+Restart After Effects after copying the plugin.
