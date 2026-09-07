@@ -46,17 +46,18 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         auto* dst = reinterpret_cast<PF_Pixel8*>(
             dstBase + static_cast<std::size_t>(y) * dstStride);
         for (int x = 0; x < width; ++x) {
-            dst[x] = PF_Pixel8{0, 0, 0, 255};
+            dst[x] = PF_Pixel8{255, 0, 0, 0};
         }
     }
 
     const int lineStep = std::max(1, downsample);
     const float lineAmplitude = std::max(2.0f, lineStep * 2.0f + distortion * 18.0f);
     const float direction = reverse ? -1.0f : 1.0f;
-    const bool smooth = params[SM_LOWPASS_1]->u.bd.value ||
-        params[SM_LOWPASS_2]->u.bd.value ||
-        params[SM_LOWPASS_3]->u.bd.value ||
-        params[SM_LOWPASS_4]->u.bd.value;
+    const int lowpassStages =
+        (params[SM_LOWPASS_1]->u.bd.value ? 1 : 0) +
+        (params[SM_LOWPASS_2]->u.bd.value ? 1 : 0) +
+        (params[SM_LOWPASS_3]->u.bd.value ? 1 : 0) +
+        (params[SM_LOWPASS_4]->u.bd.value ? 1 : 0);
 
     for (int sourceY = 0; sourceY < rows; sourceY += lineStep) {
         const auto* src = reinterpret_cast<const PF_Pixel8*>(
@@ -67,16 +68,21 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
 
         for (int x = 0; x < width; ++x) {
             const int sampledX = std::min((x / downsample) * downsample, width - 1);
-            const int neighborX = std::min(sampledX + (smooth ? downsample : 0), width - 1);
+            const int neighborX = std::min(sampledX + downsample, width - 1);
             const PF_Pixel8& pixel = src[sampledX];
             const PF_Pixel8& neighbor = src[neighborX];
             float red = pixel.red;
             float green = pixel.green;
             float blue = pixel.blue;
-            if (smooth) {
+            if (lowpassStages > 0) {
                 red = (red + neighbor.red) * 0.5f;
                 green = (green + neighbor.green) * 0.5f;
                 blue = (blue + neighbor.blue) * 0.5f;
+                for (int stage = 1; stage < lowpassStages; ++stage) {
+                    red = (red + neighbor.red) * 0.5f;
+                    green = (green + neighbor.green) * 0.5f;
+                    blue = (blue + neighbor.blue) * 0.5f;
+                }
             }
 
             float signal = (red * 0.299f + green * 0.587f + blue * 0.114f) / 255.0f;
@@ -101,9 +107,18 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             PF_Pixel8& result = reinterpret_cast<PF_Pixel8*>(
                 dstBase + static_cast<std::size_t>(target) * dstStride)[targetX];
             result.alpha = ignoreAlpha ? 255 : pixel.alpha;
-            result.red = rgb && params[SM_CH1]->u.bd.value ? intensity : intensity;
-            result.green = rgb && params[SM_CH2]->u.bd.value ? intensity : intensity;
-            result.blue = rgb && params[SM_CH3]->u.bd.value ? intensity : intensity;
+            if (rgb) {
+                result.red = params[SM_CH1]->u.bd.value ? clampByte(red * opacity) : 0;
+                result.green = params[SM_CH2]->u.bd.value ? clampByte(green * opacity) : 0;
+                result.blue = params[SM_CH3]->u.bd.value ? clampByte(blue * opacity) : 0;
+            } else {
+                result.red = result.green = result.blue = intensity;
+            }
+            if (params[SM_CH4]->u.bd.value) {
+                result.red = std::max(result.red, intensity);
+                result.green = std::max(result.green, intensity);
+                result.blue = std::max(result.blue, intensity);
+            }
             if (!params[SM_HIDE_WHITE_LINE]->u.bd.value && intensity > 220) {
                 result.red = result.green = result.blue = 255;
             }
