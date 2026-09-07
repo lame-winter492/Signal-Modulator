@@ -32,16 +32,19 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
     const int dstStride = std::abs(output->rowbytes);
     const int width = std::min(input->width, output->width);
     const float frequency = static_cast<float>(params[SM_OMEGA]->u.fs_d.value);
-    const float phase = static_cast<float>(params[SM_PHASE]->u.ad.value) / 65536.0f;
+    const float phase = static_cast<float>(params[SM_PHASE]->u.fs_d.value) * 6.2831853f;
     const float distortion = static_cast<float>(params[SM_DISTORTION]->u.fs_d.value) / 100.0f;
-    const int downsample = std::max(1, static_cast<int>(params[SM_DOWNSAMPLE]->u.fs_d.value));
+    const int downsample = 1;
     // The host control describes the signal orientation, while the rasterizer
     // walks the perpendicular axis. Keep the UI semantics aligned with the
     // reference workflow: Vertical produces horizontal traces and vice versa.
     const bool vertical = params[SM_ORIENTATION]->u.pd.value == 1;
     const bool reverse = params[SM_DIRECTION]->u.pd.value == 2;
     const bool invert = params[SM_INVERT]->u.bd.value != 0;
-    const bool contourMode = params[SM_CONTOUR_MODE]->u.bd.value != 0;
+    const float opacity = static_cast<float>(params[SM_OPACITY]->u.fs_d.value) / 255.0f;
+    const bool ignoreAlpha = params[SM_IGNORE_ALPHA]->u.bd.value != 0;
+    const bool hideWhiteLine = params[SM_HIDE_WHITE_LINE]->u.bd.value != 0;
+    const bool contourMode = true;
 
     for (int y = 0; y < rows; ++y) {
         auto* dst = reinterpret_cast<PF_Pixel8*>(
@@ -126,12 +129,15 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 ? displaySignal > 0.10f
                 : displaySignal > 0.02f;
             const std::uint8_t intensity = contourMode
-                ? (contourLine ? 255 : 0)
-                : clampByte(displaySignal * 255.0f);
+                ? (contourLine ? clampByte(opacity * 255.0f) : 0)
+                : clampByte(displaySignal * opacity * 255.0f);
             PF_Pixel8& result = reinterpret_cast<PF_Pixel8*>(
                 dstBase + static_cast<std::size_t>(targetY) * dstStride)[targetX];
-            result.alpha = 255;
+            result.alpha = ignoreAlpha ? 255 : clampByte(alpha);
             result.red = result.green = result.blue = intensity;
+            if (!hideWhiteLine && intensity > 220) {
+                result.red = result.green = result.blue = 255;
+            }
 
             if (contourMode && contourLine && previousContour && targetX > 0) {
                 const int bridgeStart = std::min(previousTarget, targetY);
