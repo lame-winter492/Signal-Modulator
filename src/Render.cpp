@@ -61,7 +61,7 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         (params[SM_LOWPASS_2]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_3]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_4]->u.bd.value ? 1 : 0);
-    const int lineStep = contourMode ? std::max(2, 4 - lowpassStages / 2) : 1;
+    const int lineStep = std::max(3, 7 - lowpassStages * 2);
     const float lineAmplitude = contourMode
         ? std::max(8.0f, 18.0f + distortion * 3.5f)
         : std::max(4.0f, 4.0f + distortion * 80.0f);
@@ -78,7 +78,9 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         for (int position = 0; position < sampleLength; ++position) {
             const int sampledPosition = std::min(
                 (position / downsample) * downsample, sampleLength - 1);
-            const int radius = lowpassStages * std::max(1, downsample);
+            const int radius = lowpassStages > 0
+                ? 2 + lowpassStages * 3
+                : 0;
             float red = 0.0f;
             float green = 0.0f;
             float blue = 0.0f;
@@ -112,10 +114,11 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 (static_cast<float>(position) / std::max(sampleLength, 1)) *
                     frequency * 6.2831853f * direction +
                 phase);
-            const float centered = signal - 0.5f;
-            const float shaped = std::tanh(centered * (2.0f + distortion * 6.0f));
+            const float smoothedSignal = std::clamp(signal, 0.0f, 1.0f);
+            const float shaped = std::tanh(
+                (smoothedSignal - 0.5f) * (1.5f + distortion * 3.0f));
             const int displacement = static_cast<int>(
-                (shaped + carrier * distortion * 0.02f) * lineAmplitude);
+                (shaped * 0.85f + carrier * distortion * 0.012f) * lineAmplitude);
             // The waveform is displaced perpendicular to its read direction.
             const int targetX = vertical ? baseline + displacement : position;
             const int targetY = vertical ? position : baseline + displacement;
@@ -124,9 +127,9 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 continue;
             }
 
-            const float displaySignal = std::pow(std::clamp(signal, 0.0f, 1.0f), 1.35f);
+            const float displaySignal = std::pow(smoothedSignal, 1.7f);
             const bool contourLine = contourMode
-                ? displaySignal > 0.10f
+                ? displaySignal > 0.30f
                 : displaySignal > 0.02f;
             const std::uint8_t intensity = contourMode
                 ? (contourLine ? clampByte(opacity * 255.0f) : 0)
