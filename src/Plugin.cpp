@@ -1,14 +1,16 @@
 #include "Plugin.h"
 
-#include "AE_Macros.h"
+#include <cstdio>
+
 #include "Param_Utils.h"
 
 #include "Params.h"
 #include "Render.h"
 
 PF_Err About(PF_InData*, PF_OutData* out_data, PF_ParamDef*[], PF_LayerDef*) {
-    AEFX_SPRINTF(
+    std::snprintf(
         out_data->return_msg,
+        PF_MAX_EFFECT_MSG_LEN + 1,
         "Signal Modulator v%d.%d\\rOriginal modulation effect (work in progress).",
         static_cast<int>(SM_VERSION_MAJOR),
         static_cast<int>(SM_VERSION_MINOR));
