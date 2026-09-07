@@ -39,6 +39,26 @@ PF_Err Render(PF_InData* in_data, PF_OutData* out_data, PF_ParamDef* params[], P
     return RenderFrame(in_data, out_data, params, output);
 }
 
+extern "C" DllExport PF_Err PluginDataEntryFunction2(
+    PF_PluginDataPtr in_ptr,
+    PF_PluginDataCB2 in_callback,
+    SPBasicSuite* in_suite,
+    const char*,
+    const char*) {
+    PF_Err result = PF_Err_INVALID_CALLBACK;
+    (void)in_suite;
+    result = PF_REGISTER_EFFECT_EXT2(
+        in_ptr,
+        in_callback,
+        "Signal Modulator",
+        "Signal Modulator",
+        "Signal Modulator",
+        AE_RESERVED_INFO,
+        "EffectMain",
+        "https://github.com/lame-winter492/Signal-Modulator");
+    return result;
+}
+
 extern "C" DllExport PF_Err EffectMain(
     PF_Cmd cmd,
     PF_InData* in_data,
