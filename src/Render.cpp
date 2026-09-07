@@ -41,6 +41,7 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
     const float opacity = static_cast<float>(params[SM_OPACITY]->u.fs_d.value) / 100.0f;
     const bool ignoreAlpha = params[SM_IGNORE_ALPHA]->u.bd.value != 0;
     const bool rgb = params[SM_COLOR_SCHEME]->u.pd.value == 2;
+    const bool contourMode = params[SM_CONTOUR_MODE]->u.bd.value != 0;
 
     for (int y = 0; y < rows; ++y) {
         auto* dst = reinterpret_cast<PF_Pixel8*>(
@@ -125,11 +126,18 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             }
 
             const float displaySignal = std::pow(std::clamp(signal, 0.0f, 1.0f), 1.35f);
-            const std::uint8_t intensity = clampByte(displaySignal * opacity * alphaMask * 255.0f);
+            const float contourBands = 8.0f + distortion * 24.0f;
+            const float contourPhase = displaySignal * contourBands;
+            const float contourDistance = std::abs(
+                contourPhase - std::round(contourPhase));
+            const bool contourLine = contourDistance < 0.075f;
+            const std::uint8_t intensity = contourMode
+                ? (contourLine ? clampByte(opacity * alphaMask * 255.0f) : 0)
+                : clampByte(displaySignal * opacity * alphaMask * 255.0f);
             PF_Pixel8& result = reinterpret_cast<PF_Pixel8*>(
                 dstBase + static_cast<std::size_t>(targetY) * dstStride)[targetX];
             result.alpha = ignoreAlpha ? 255 : clampByte(alpha * alphaMask);
-            if (rgb) {
+            if (rgb && !contourMode) {
                 result.red = params[SM_CH1]->u.bd.value ? clampByte(red * opacity) : 0;
                 result.green = params[SM_CH2]->u.bd.value ? clampByte(green * opacity) : 0;
                 result.blue = params[SM_CH3]->u.bd.value ? clampByte(blue * opacity) : 0;

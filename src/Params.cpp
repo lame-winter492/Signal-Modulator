@@ -34,6 +34,7 @@ PF_Err AddParams(PF_InData* in_data, PF_OutData* out_data) {
     PF_ADD_CHECKBOX("CH2", "Enable channel 2", 1, 0, SM_CH2);
     PF_ADD_CHECKBOX("CH3", "Enable channel 3", 1, 0, SM_CH3);
     PF_ADD_CHECKBOX("CH4", "Enable channel 4", 1, 0, SM_CH4);
+    PF_ADD_CHECKBOX("Contour mode", "Quantize the signal into thin contour lines", 0, 0, SM_CONTOUR_MODE);
 
     out_data->num_params = SM_NUM_PARAMS;
     return err;

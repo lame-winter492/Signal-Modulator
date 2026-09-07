@@ -30,6 +30,7 @@ enum ParamIndex {
     SM_CH2,
     SM_CH3,
     SM_CH4,
+    SM_CONTOUR_MODE,
     SM_NUM_PARAMS
 };
 
