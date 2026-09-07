@@ -35,7 +35,10 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
     const float phase = static_cast<float>(params[SM_PHASE]->u.ad.value) / 65536.0f;
     const float distortion = static_cast<float>(params[SM_DISTORTION]->u.fs_d.value) / 100.0f;
     const int downsample = std::max(1, static_cast<int>(params[SM_DOWNSAMPLE]->u.fs_d.value));
-    const bool vertical = params[SM_ORIENTATION]->u.pd.value == 2;
+    // The host control describes the signal orientation, while the rasterizer
+    // walks the perpendicular axis. Keep the UI semantics aligned with the
+    // reference workflow: Vertical produces horizontal traces and vice versa.
+    const bool vertical = params[SM_ORIENTATION]->u.pd.value == 1;
     const bool reverse = params[SM_DIRECTION]->u.pd.value == 2;
     const bool invert = params[SM_INVERT]->u.bd.value != 0;
     const float opacity = static_cast<float>(params[SM_OPACITY]->u.fs_d.value) / 100.0f;
@@ -64,8 +67,8 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         : std::max(4.0f, 4.0f + distortion * 80.0f);
     const float direction = reverse ? -1.0f : 1.0f;
 
-    // Orientation is the direction in which the source is read. Horizontal
-    // reads each row left-to-right; vertical reads each column top-to-bottom.
+    // The rasterizer reads along the axis perpendicular to the displayed
+    // traces, matching the orientation names used by the reference effect.
     const int lineCount = vertical ? width : rows;
     const int sampleLength = vertical ? rows : width;
     for (int line = 0; line < lineCount; line += lineStep) {
