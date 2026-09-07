@@ -62,10 +62,14 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         (params[SM_LOWPASS_3]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_4]->u.bd.value ? 1 : 0);
 
+    // Orientation is the direction in which the source is read. Horizontal
+    // reads each row left-to-right; vertical reads each column top-to-bottom.
     const int lineCount = vertical ? width : rows;
     const int sampleLength = vertical ? rows : width;
     for (int line = 0; line < lineCount; line += lineStep) {
         const int baseline = line;
+        int previousTarget = baseline;
+        bool previousContour = false;
         for (int position = 0; position < sampleLength; ++position) {
             const int sampledPosition = std::min(
                 (position / downsample) * downsample, sampleLength - 1);
@@ -111,7 +115,8 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             if (invert) {
                 signal = 1.0f - signal;
             }
-            const int previousPosition = std::max(0, sampledPosition - std::max(1, downsample));
+            const int previousPosition = std::max(
+                0, sampledPosition - std::max(1, downsample));
             const int previousX = vertical ? line : previousPosition;
             const int previousY = vertical ? previousPosition : line;
             const auto* previousRow = reinterpret_cast<const PF_Pixel8*>(
@@ -130,9 +135,11 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             const float shaped = std::tanh(centered * (2.0f + distortion * 6.0f));
             const int displacement = static_cast<int>(
                 (shaped + carrier * distortion * 0.02f) * lineAmplitude);
+            // The waveform is displaced perpendicular to its read direction.
             const int targetX = vertical ? baseline + displacement : position;
             const int targetY = vertical ? position : baseline + displacement;
             if (targetY < 0 || targetY >= rows || targetX < 0 || targetX >= width) {
+                previousContour = false;
                 continue;
             }
 
@@ -159,6 +166,21 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             if (!params[SM_HIDE_WHITE_LINE]->u.bd.value && intensity > 220) {
                 result.red = result.green = result.blue = 255;
             }
+
+            if (contourMode && contourLine && previousContour && targetX > 0) {
+                const int bridgeStart = std::min(previousTarget, targetY);
+                const int bridgeEnd = std::max(previousTarget, targetY);
+                for (int bridgeY = bridgeStart; bridgeY <= bridgeEnd; ++bridgeY) {
+                    auto* bridgeRow = reinterpret_cast<PF_Pixel8*>(
+                        dstBase + static_cast<std::size_t>(bridgeY) * dstStride);
+                    bridgeRow[targetX - 1].red = 255;
+                    bridgeRow[targetX - 1].green = 255;
+                    bridgeRow[targetX - 1].blue = 255;
+                    bridgeRow[targetX - 1].alpha = ignoreAlpha ? 255 : 255;
+                }
+            }
+            previousTarget = targetY;
+            previousContour = contourMode && contourLine;
         }
     }
 
