@@ -51,7 +51,7 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
     }
 
     const int lineStep = std::max(1, downsample);
-    const float lineAmplitude = std::max(2.0f, lineStep * 2.0f + distortion * 18.0f);
+    const float lineAmplitude = std::max(3.0f, 6.0f + distortion * 48.0f);
     const float direction = reverse ? -1.0f : 1.0f;
     const int lowpassStages =
         (params[SM_LOWPASS_1]->u.bd.value ? 1 : 0) +
@@ -85,16 +85,18 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 }
             }
 
-            float signal = (red * 0.299f + green * 0.587f + blue * 0.114f) / 255.0f;
+            const float luminance = (red * 0.299f + green * 0.587f + blue * 0.114f) / 255.0f;
+            float signal = luminance;
             if (invert) {
                 signal = 1.0f - signal;
             }
             const float carrier = std::sin(
                 (static_cast<float>(x) / std::max(width, 1)) * frequency * 6.2831853f * direction +
                 phase);
-            const float shaped = std::tanh((signal - 0.5f) * (2.0f + distortion * 12.0f));
+            const float centered = signal - 0.5f;
+            const float shaped = std::tanh(centered * (2.0f + distortion * 4.0f));
             const int displacement = static_cast<int>(
-                (shaped + carrier * distortion * 0.15f) * lineAmplitude);
+                (shaped + carrier * distortion * 0.25f) * lineAmplitude);
             const int target = vertical
                 ? static_cast<int>((static_cast<float>(x) / std::max(width, 1)) * (rows - 1)) + displacement
                 : baseline + displacement;
@@ -103,7 +105,7 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 continue;
             }
 
-            const std::uint8_t intensity = clampByte((0.35f + signal * 0.65f) * opacity * 255.0f);
+            const std::uint8_t intensity = clampByte((0.25f + luminance * 0.75f) * opacity * 255.0f);
             PF_Pixel8& result = reinterpret_cast<PF_Pixel8*>(
                 dstBase + static_cast<std::size_t>(target) * dstStride)[targetX];
             result.alpha = ignoreAlpha ? 255 : pixel.alpha;
