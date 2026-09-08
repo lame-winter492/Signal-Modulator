@@ -61,10 +61,8 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         (params[SM_LOWPASS_2]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_3]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_4]->u.bd.value ? 1 : 0);
-    const int lineStep = std::max(3, 7 - lowpassStages * 2);
-    const float lineAmplitude = contourMode
-        ? std::max(8.0f, 18.0f + distortion * 3.5f)
-        : std::max(4.0f, 4.0f + distortion * 80.0f);
+    const int lineStep = 1;
+    const float lineAmplitude = std::max(12.0f, 8.0f + distortion * 150.0f);
     const float direction = reverse ? -1.0f : 1.0f;
 
     // The rasterizer reads along the axis perpendicular to the displayed
@@ -112,7 +110,7 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             }
             const float carrier = std::sin(
                 (static_cast<float>(position) / std::max(sampleLength, 1)) *
-                    frequency * 6.2831853f * direction +
+                    frequency * 6.2831853f * 6.0f * direction +
                 phase);
             const float smoothedSignal = std::clamp(signal, 0.0f, 1.0f);
             const float shaped = std::tanh(
@@ -127,10 +125,12 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 continue;
             }
 
-            const float displaySignal = std::pow(smoothedSignal, 1.7f);
-            const bool contourLine = contourMode
-                ? displaySignal > 0.30f
-                : displaySignal > 0.02f;
+            const float displaySignal = std::pow(smoothedSignal, 1.15f);
+            const float contourBands = 10.0f + static_cast<float>(lowpassStages) * 4.0f;
+            const float contourPosition = displaySignal * contourBands;
+            const float contourDistance = std::abs(
+                contourPosition - std::round(contourPosition));
+            const bool contourLine = contourDistance < 0.085f;
             const std::uint8_t intensity = contourMode
                 ? (contourLine ? clampByte(opacity * 255.0f) : 0)
                 : clampByte(displaySignal * opacity * 255.0f);
