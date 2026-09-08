@@ -63,8 +63,6 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         (params[SM_LOWPASS_4]->u.bd.value ? 1 : 0);
     const int lineStep = 1;
     const float lineAmplitude = std::max(12.0f, 8.0f + distortion * 150.0f);
-    const float direction = reverse ? -1.0f : 1.0f;
-
     // The rasterizer reads along the axis perpendicular to the displayed
     // traces, matching the orientation names used by the reference effect.
     const int lineCount = vertical ? width : rows;
@@ -108,15 +106,17 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             if (invert) {
                 signal = 1.0f - signal;
             }
+            const float carrierPosition = reverse
+                ? static_cast<float>(sampleLength - 1 - position)
+                : static_cast<float>(position);
             const float carrier = std::sin(
-                (static_cast<float>(position) / std::max(sampleLength, 1)) *
-                    frequency * 6.2831853f * 6.0f * direction +
-                phase);
+                (carrierPosition / std::max(sampleLength, 1)) *
+                    frequency * 6.2831853f * 6.0f + phase);
             const float smoothedSignal = std::clamp(signal, 0.0f, 1.0f);
             const float shaped = std::tanh(
                 (smoothedSignal - 0.5f) * (1.5f + distortion * 3.0f));
             const int displacement = static_cast<int>(
-                (shaped * 0.85f + carrier * distortion * 0.012f) * lineAmplitude);
+                (shaped * 0.85f + carrier * distortion * 0.08f) * lineAmplitude);
             // The waveform is displaced perpendicular to its read direction.
             const int targetX = vertical ? baseline + displacement : position;
             const int targetY = vertical ? position : baseline + displacement;
@@ -130,7 +130,9 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             const float contourPosition = displaySignal * contourBands;
             const float contourDistance = std::abs(
                 contourPosition - std::round(contourPosition));
-            const bool contourLine = contourDistance < 0.085f;
+            const float alphaSignal = alpha / 255.0f;
+            const bool contourLine = contourDistance < 0.085f &&
+                (ignoreAlpha || alphaSignal > 0.5f);
             const std::uint8_t intensity = contourMode
                 ? (contourLine ? clampByte(opacity * 255.0f) : 0)
                 : clampByte(displaySignal * opacity * 255.0f);
@@ -138,8 +140,10 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 dstBase + static_cast<std::size_t>(targetY) * dstStride)[targetX];
             result.alpha = ignoreAlpha ? 255 : clampByte(alpha);
             result.red = result.green = result.blue = intensity;
-            if (!hideWhiteLine && intensity > 220) {
-                result.red = result.green = result.blue = 255;
+            if (hideWhiteLine) {
+                const std::uint8_t reduced = clampByte(
+                    static_cast<float>(intensity) * 0.55f);
+                result.red = result.green = result.blue = reduced;
             }
 
             if (contourMode && contourLine && previousContour && targetX > 0) {
