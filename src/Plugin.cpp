@@ -26,7 +26,7 @@ PF_Err GlobalSetup(PF_InData*, PF_OutData* out_data, PF_ParamDef*[], PF_LayerDef
         SM_VERSION_BUILD);
 
     out_data->out_flags = PF_OutFlag_PIX_INDEPENDENT | PF_OutFlag_DEEP_COLOR_AWARE;
-    out_data->out_flags2 = PF_OutFlag2_FLOAT_COLOR_AWARE | PF_OutFlag2_SUPPORTS_THREADED_RENDERING;
+    out_data->out_flags2 = PF_OutFlag2_SUPPORTS_THREADED_RENDERING;
 
     return PF_Err_NONE;
 }
@@ -37,6 +37,26 @@ PF_Err ParamsSetup(PF_InData* in_data, PF_OutData* out_data, PF_ParamDef*[], PF_
 
 PF_Err Render(PF_InData* in_data, PF_OutData* out_data, PF_ParamDef* params[], PF_LayerDef* output) {
     return RenderFrame(in_data, out_data, params, output);
+}
+
+extern "C" DllExport PF_Err PluginDataEntryFunction2(
+    PF_PluginDataPtr in_ptr,
+    PF_PluginDataCB2 in_callback,
+    SPBasicSuite* in_suite,
+    const char*,
+    const char*) {
+    PF_Err result = PF_Err_INVALID_CALLBACK;
+    (void)in_suite;
+    result = PF_REGISTER_EFFECT_EXT2(
+        in_ptr,
+        in_callback,
+        "Signal Modulator",
+        "Signal Modulator",
+        "Signal Modulator",
+        AE_RESERVED_INFO,
+        "EffectMain",
+        "https://github.com/lame-winter492/Signal-Modulator");
+    return result;
 }
 
 extern "C" DllExport PF_Err EffectMain(

@@ -33,6 +33,17 @@ if(SIGNAL_MODULATOR_BUILD_AE_PLUGIN)
             src/Render.cpp
         )
 
+        set(PIPL_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/resources/SignalModulatorPiPL.r)
+        set(PIPL_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/SignalModulatorPiPL.rc)
+        add_custom_command(
+            OUTPUT ${PIPL_OUTPUT}
+            COMMAND ${SIGNAL_MODULATOR_AE_SDK_ROOT}/Examples/Resources/PiPLtool.exe
+                    ${PIPL_SOURCE} ${PIPL_OUTPUT}
+            DEPENDS ${PIPL_SOURCE}
+            VERBATIM
+        )
+        target_sources(SignalModulator PRIVATE ${PIPL_OUTPUT})
+
         target_include_directories(SignalModulator PRIVATE ${AE_INCLUDE_DIRS} src)
         target_link_libraries(SignalModulator PRIVATE signal_modulator_core)
 
