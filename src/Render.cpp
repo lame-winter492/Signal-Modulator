@@ -62,7 +62,8 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
         (params[SM_LOWPASS_3]->u.bd.value ? 1 : 0) +
         (params[SM_LOWPASS_4]->u.bd.value ? 1 : 0);
     const int lineStep = 1;
-    const float lineAmplitude = std::max(12.0f, 8.0f + distortion * 150.0f);
+    const float signalAmplitude = 5.0f + distortion * 24.0f;
+    const float carrierAmplitude = 2.0f + distortion * 12.0f;
     // The rasterizer reads along the axis perpendicular to the displayed
     // traces, matching the orientation names used by the reference effect.
     const int lineCount = vertical ? width : rows;
@@ -110,12 +111,12 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             const float carrierPosition = static_cast<float>(signalPosition);
             const float carrier = std::sin(
                 (carrierPosition / std::max(sampleLength, 1)) *
-                    frequency * 6.2831853f * 6.0f + phase);
+                    std::max(0.01f, frequency) * 6.2831853f * 12.0f + phase);
             const float smoothedSignal = std::clamp(signal, 0.0f, 1.0f);
             const float shaped = std::tanh(
                 (smoothedSignal - 0.5f) * (1.5f + distortion * 3.0f));
             const int displacement = static_cast<int>(
-                (shaped * 0.85f + carrier * distortion * 0.08f) * lineAmplitude);
+                shaped * signalAmplitude + carrier * carrierAmplitude);
             // The waveform is displaced perpendicular to its read direction.
             const int targetX = vertical ? baseline + displacement : position;
             const int targetY = vertical ? position : baseline + displacement;
