@@ -106,9 +106,8 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             if (invert) {
                 signal = 1.0f - signal;
             }
-            const float carrierPosition = reverse
-                ? static_cast<float>(sampleLength - 1 - position)
-                : static_cast<float>(position);
+            const int signalPosition = reverse ? sampleLength - 1 - position : position;
+            const float carrierPosition = static_cast<float>(signalPosition);
             const float carrier = std::sin(
                 (carrierPosition / std::max(sampleLength, 1)) *
                     frequency * 6.2831853f * 6.0f + phase);
@@ -133,20 +132,16 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
             const float alphaSignal = alpha / 255.0f;
             const bool contourLine = contourDistance < 0.085f &&
                 (ignoreAlpha || alphaSignal > 0.5f);
+            const bool whiteLine = contourLine && displaySignal > 0.85f;
+            const bool visibleLine = contourLine && (!hideWhiteLine || !whiteLine);
             const std::uint8_t intensity = contourMode
-                ? (contourLine ? clampByte(opacity * 255.0f) : 0)
-                : clampByte(displaySignal * opacity * 255.0f);
+                ? (visibleLine ? clampByte(opacity * 255.0f) : 0)
+                : clampByte(visibleLine ? displaySignal * opacity * 255.0f : 0);
             PF_Pixel8& result = reinterpret_cast<PF_Pixel8*>(
                 dstBase + static_cast<std::size_t>(targetY) * dstStride)[targetX];
             result.alpha = ignoreAlpha ? 255 : clampByte(alpha);
             result.red = result.green = result.blue = intensity;
-            if (hideWhiteLine) {
-                const std::uint8_t reduced = clampByte(
-                    static_cast<float>(intensity) * 0.55f);
-                result.red = result.green = result.blue = reduced;
-            }
-
-            if (contourMode && contourLine && previousContour && targetX > 0) {
+            if (contourMode && visibleLine && previousContour && targetX > 0) {
                 const int bridgeStart = std::min(previousTarget, targetY);
                 const int bridgeEnd = std::max(previousTarget, targetY);
                 for (int bridgeY = bridgeStart; bridgeY <= bridgeEnd; ++bridgeY) {
@@ -159,7 +154,7 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 }
             }
             previousTarget = targetY;
-            previousContour = contourMode && contourLine;
+            previousContour = contourMode && visibleLine;
         }
     }
 
