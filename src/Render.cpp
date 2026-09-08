@@ -141,16 +141,20 @@ PF_Err RenderFrame(PF_InData*, PF_OutData*, PF_ParamDef* params[], PF_LayerDef* 
                 dstBase + static_cast<std::size_t>(targetY) * dstStride)[targetX];
             result.alpha = ignoreAlpha ? 255 : clampByte(alpha);
             result.red = result.green = result.blue = intensity;
-            if (contourMode && visibleLine && previousContour && targetX > 0) {
+            if (contourMode && visibleLine && previousContour &&
+                targetX > 0 && opacity > 0.0f) {
                 const int bridgeStart = std::min(previousTarget, targetY);
                 const int bridgeEnd = std::max(previousTarget, targetY);
                 for (int bridgeY = bridgeStart; bridgeY <= bridgeEnd; ++bridgeY) {
                     auto* bridgeRow = reinterpret_cast<PF_Pixel8*>(
                         dstBase + static_cast<std::size_t>(bridgeY) * dstStride);
-                    bridgeRow[targetX - 1].red = 255;
-                    bridgeRow[targetX - 1].green = 255;
-                    bridgeRow[targetX - 1].blue = 255;
-                    bridgeRow[targetX - 1].alpha = 255;
+                    const std::uint8_t bridgeIntensity = clampByte(opacity * 255.0f);
+                    bridgeRow[targetX - 1].red = bridgeIntensity;
+                    bridgeRow[targetX - 1].green = bridgeIntensity;
+                    bridgeRow[targetX - 1].blue = bridgeIntensity;
+                    bridgeRow[targetX - 1].alpha = ignoreAlpha
+                        ? 255
+                        : clampByte(alpha);
                 }
             }
             previousTarget = targetY;
